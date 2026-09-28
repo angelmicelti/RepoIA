@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RepoIA - Repositorio de Apps del IES</title>
+
+    <!-- PWA -->
+    <meta name="theme-color" content="#4f46e5">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="RepoIA">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="img/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="img/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="img/favicon-16.png">
+    <link rel="apple-touch-icon" href="img/apple-touch-icon.png">
+
+    <!-- Tailwind CSS -->
+    <script src="https://unpkg.com/tailwindcss-cdn@3.4.10/tailwindcss.js"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Firebase (SDK compat, ideal para archivo único) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js"></script>
+
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in { animation: fadeIn 1.2s ease-out forwards; }
+
+        .screen { display: none; }
+        .screen.active { display: flex; }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Chips de asignatura */
+        .subject-chip {
+            border: 1px solid #e5e7eb;
+            background: white;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        .subject-chip:hover { border-color: #6366f1; color: #4f46e5; }
+        .subject-chip.active {
+            background: #4f46e5;
+            color: white;
+            border-color: #4f46e5;
+        }
+
+        /* Loader estilo PWA */
+        #app-loader {
+            position: fixed;
+            inset: 0;
+            background: white;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.5s;
+        }
+        .spinner {
+            width: 44px;
+            height: 44px;
+            border: 4px solid #e5e7eb;
+            border-top-color: #4f46e5;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans h-[100dvh] overflow-hidden selection:bg-indigo-200">
+
+    <!-- Loader -->
+    <div id="app-loader">
+        <img src="img/RepoIA.png" alt="RepoIA" class="w-24 h-24 object-contain mb-4">
+        <div class="spinner mb-4"></div>
+        <h2 class="text-lg font-semibold text-gray-600">Cargando RepoIA...</h2>
+    </div>
+
+    <!-- Toast de notificaciones -->
+    <div id="toast" class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-xl opacity-0 transition-opacity duration-300 pointer-events-none z-50">
+        Mensaje
+    </div>
+
+    <!-- =======================
+         PANTALLA 1: INTRO
+    ======================== -->
+    <div id="screen-intro" class="screen active flex-col items-center justify-between h-full w-full bg-gradient-to-br from-blue-600 to-indigo-800 text-white p-6 cursor-pointer select-none" onclick="navigateTo('screen-menu')">
+        <div class="flex-grow flex flex-col items-center justify-center animate-fade-in text-center pointer-events-none">
+            <div class="bg-white rounded-3xl shadow-2xl p-4 mb-6">
+                <img src="img/RepoIA.png" alt="Logo RepoIA" class="w-28 h-28 md:w-36 md:h-36 object-contain">
+            </div>
+            <h1 class="text-4xl md:text-6xl font-bold tracking-wider mb-2">RepoIA</h1>
+            <span id="intro-version-chip" class="bg-white bg-opacity-15 backdrop-blur text-xs font-mono px-3 py-1 rounded-full mb-3 pointer-events-none">v–</span>
+            <p class="text-lg md:text-2xl font-light opacity-80 tracking-widest">Repositorio de Apps del Profesorado</p>
+        </div>
+        <div class="animate-pulse mb-8 text-sm md:text-base font-medium tracking-wide pointer-events-none">
+            Haz clic para entrar <i class="fa-solid fa-arrow-right ml-2"></i>
+        </div>
+    </div>
+
+    <!-- =======================
+         PANTALLA 2: MENÚ PRINCIPAL
+    ======================== -->
+    <div id="screen-menu" class="screen flex-col h-full w-full max-w-4xl mx-auto bg-white shadow-xl md:my-4 md:rounded-xl overflow-hidden">
+        <header class="bg-indigo-700 text-white p-4 shadow-md flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <img src="img/RepoIA.png" alt="RepoIA" class="w-9 h-9 rounded-lg bg-white object-contain p-0.5">
+                <div class="flex flex-col items-start">
+                    <h2 class="text-xl font-bold leading-tight">RepoIA</h2>
+                    <span id="version-chip" class="bg-white bg-opacity-20 text-[10px] font-mono px-2 py-0.5 rounded-full mt-0.5">v–</span>
+                </div>
+            </div>
+            <div id="db-status" class="bg-black bg-opacity-30 text-xs font-mono px-3 py-2 rounded">Conectando...</div>
+        </header>
+
+        <main class="flex-grow flex flex-col items-center justify-center p-6 gap-6 overflow-y-auto w-full">
+            <button onclick="navigateTo('screen-browse')" class="w-full max-w-md bg-white border-2 border-indigo-100 hover:border-indigo-500 hover:shadow-lg p-6 rounded-xl transition-all duration-300 group text-left">
+                <div class="flex items-center">
+                    <div class="bg-indigo-100 text-indigo-600 p-4 rounded-full mr-4 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
+                        <i class="fa-solid fa-magnifying-glass text-2xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-800">Explorar Repositorio</h3>
+                        <p class="text-gray-500 text-sm mt-1">Consulta las apps por asignatura.</p>
+                    </div>
+                </div>
+            </button>
+
+            <button onclick="openAddScreen()" class="w-full max-w-md bg-white border-2 border-green-100 hover:border-green-500 hover:shadow-lg p-6 rounded-xl transition-all duration-300 group text-left">
+                <div class="flex items-center">
+                    <div class="bg-green-100 text-green-600 p-4 rounded-full mr-4 group-hover:bg-green-600 group-hover:text-white transition-colors">
+                        <i class="fa-solid fa-plus text-2xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-800">Añadir mi App</h3>
+                        <p class="text-gray-500 text-sm mt-1">Publica la ficha de tu aplicación.</p>
+                    </div>
+                </div>
+            </button>
+
+            <p id="stats-label" class="text-sm text-gray-400"></p>
+        </main>
+
+        <footer class="p-3 bg-gray-50 border-t border-gray-200 text-center text-xs text-gray-400">
+            RepoIA · Apps creadas por el profesorado del IES
+        </footer>
+    </div>
+
+    <!-- =======================
+         PANTALLA 3: AÑADIR/EDITAR FICHA
+    ======================== -->
+    <div id="screen-add" class="screen flex-col h-full w-full max-w-4xl mx-auto bg-white shadow-xl md:my-4 md:rounded-xl overflow-hidden">
+        <header class="bg-green-600 text-white p-4 shadow-md flex items-center gap-3">
+            <button onclick="navigateTo('screen-menu')" class="hover:bg-green-700 p-2 rounded-full transition"><i class="fa-solid fa-arrow-left"></i></button>
+            <h2 id="form-title" class="text-xl font-bold">Añadir Nueva Aplicación</h2>
+        </header>
+
+        <main class="flex-grow p-6 overflow-y-auto no-scrollbar">
+            <form id="add-app-form" class="max-w-lg mx-auto space-y-5">
+
+                <!-- Título -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Título de la Aplicación <span class="text-red-500">*</span></label>
+                    <input type="text" id="app-title" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none transition" placeholder="Ej: Generador de Ejercicios v2">
+                </div>
+
+                <!-- Asignatura -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Asignatura a la que va destinada <span class="text-red-500">*</span></label>
+                    <input type="text" id="app-subject" required list="subjects-list" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none transition" placeholder="Escribe o elige una asignatura">
+                    <datalist id="subjects-list"></datalist>
+                    <p class="text-xs text-gray-400 mt-1">Las apps se agruparán en el repositorio según este campo.</p>
+                </div>
+
+                <!-- Autoría -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Autor/a</label>
+                    <input type="text" id="app-author" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none transition" placeholder="Nombre del profesorado creador">
+                </div>
+
+                <!-- Descripción -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                    <textarea id="app-description" rows="3" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none transition resize-none" placeholder="Breve resumen de las funciones..."></textarea>
+                </div>
+
+                <!-- Enlace -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Enlace a la App / Archivo <span class="text-red-500">*</span></label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-2.5 text-gray-400"><i class="fa-solid fa-link"></i></span>
+                        <input type="url" id="app-link" required class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none transition" placeholder="https://drive.google.com/... o URL de la app">
+                    </div>
+                </div>
+
+                <!-- Check PWA -->
+                <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <div class="flex items-center mb-2">
+                        <input type="checkbox" id="app-is-pwa" class="w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500" onchange="togglePwaUrlInput()">
+                        <label for="app-is-pwa" class="ml-2 text-sm font-medium text-gray-700">Es una Progressive Web App (PWA)</label>
+                    </div>
+                    <div id="pwa-url-container" class="hidden mt-3">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">URL de Alojamiento</label>
+                        <input type="url" id="app-pwa-url" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none transition text-sm" placeholder="https://mi-app.netlify.app">
+                    </div>
+                </div>
+
+                <!-- Botón Guardar -->
+                <button type="submit" id="form-submit-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg shadow-lg transition transform active:scale-95">
+                    <i class="fa-solid fa-save mr-2"></i> Guardar Ficha
+                </button>
+            </form>
+        </main>
+    </div>
+
+    <!-- =======================
+         PANTALLA 4: EXPLORAR REPOSITORIO
+    ======================== -->
+    <div id="screen-browse" class="screen flex-col h-full w-full max-w-4xl mx-auto bg-white shadow-xl md:my-4 md:rounded-xl overflow-hidden">
+        <header class="bg-indigo-600 text-white p-4 shadow-md flex items-center gap-3">
+            <button onclick="navigateTo('screen-menu')" class="hover:bg-indigo-700 p-2 rounded-full transition"><i class="fa-solid fa-arrow-left"></i></button>
+            <h2 class="text-xl font-bold">Explorar Repositorio</h2>
+        </header>
+
+        <div class="p-4 bg-gray-50 border-b border-gray-200 space-y-3">
+            <input type="text" id="search-keyword" placeholder="Buscar por título, descripción o autor/a..." class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" oninput="renderBrowse()">
+
+            <!-- Chips de asignaturas -->
+            <div id="subject-chips" class="flex gap-2 overflow-x-auto no-scrollbar pb-1"></div>
+
+            <div class="text-center text-xs text-gray-500" id="results-count">Mostrando 0 apps</div>
+        </div>
+
+        <main id="browse-main" class="flex-grow p-4 bg-gray-100 overflow-y-auto no-scrollbar">
+            <div id="apps-list" class="space-y-6 max-w-4xl mx-auto"></div>
+
+            <div id="empty-state" class="hidden flex-col items-center justify-center mt-10 text-gray-400">
+                <i class="fa-solid fa-box-open text-5xl mb-4"></i>
+                <p>No se encontraron aplicaciones.</p>
+            </div>
+        </main>
+    </div>
+
+    <!-- JAVASCRIPT -->
+    <script>
+        // ================================================
+        // CONFIGURACIÓN FIREBASE
+        // ================================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyAZrgrH46VBv56E9i8MUzwtxyoQf8t7He0",
+            authDomain: "iesvdv-96a18.firebaseapp.com",
+            databaseURL: "https://iesvdv-96a18-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "iesvdv-96a18",
+            storageBucket: "iesvdv-96a18.firebasestorage.app",
+            messagingSenderId: "526669274609",
+            appId: "1:526669274609:web:332b5420d2ca0e00467850",
+            measurementId: "G-8M80SWSM5T"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        try { firebase.analytics(); } catch (e) { console.warn('Analytics no disponible:', e.message); }
+        const db = firebase.database();
+        const appsRef = db.ref('apps');
+
+        // ================================================
+        // CONSTANTES Y ESTADO
+        // ================================================
+        const COMMON_SUBJECTS = [
+            "Matemáticas", "Lengua Castellana y Literatura", "Inglés", "Francés",
+            "Física y Química", "Biología y Geología", "Geografía e Historia",
+            "Tecnología", "Informática", "Educación Física", "Música",
+            "Educación Plástica y Visual", "Latín", "Filosofía", "Economía",
+            "Orientación", "Equipo Directivo", "Formación Profesional"
+        ];
+
+        let appsDB = {};          // { id: app }
+        let editingAppId = null;
+        let currentSubject = '';  // '' = todas
+        let appsLoaded = false;
+
+        // ================================================
+        // PWA: SERVICE WORKER Y CHIP DE VERSIÓN
+        // (APP_VERSION debe coincidir con APP_VERSION de sw.js)
+        // ================================================
+        const APP_VERSION = '1.0';
+
+        function setVersionChips(version) {
+            const text = 'v' + version;
+            const chip = document.getElementById('version-chip');
+            const introChip = document.getElementById('intro-version-chip');
+            if (chip) chip.textContent = text;
+            if (introChip) introChip.textContent = text;
+        }
+
+        // Mostrar la versión local mientras responde el Service Worker
+        setVersionChips(APP_VERSION);
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').then((registration) => {
+                // Pedir al SW su versión para reflejarla en el chip
+                askSwVersion();
+
+                // Avisar cuando haya una nueva versión instalada y a la espera
+                registration.addEventListener('updatefound', () => {
+                    const newWorker = registration.installing;
+                    if (!newWorker) return;
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            showToast('Nueva versión disponible. Recarga la página para actualizar.', 'info');
+                        }
+                    });
+                });
+            }).catch((err) => console.warn('Service Worker no registrado:', err));
+
+            // Respuesta del SW a través del MessageChannel
+            function askSwVersion() {
+                if (!navigator.serviceWorker.controller) return;
+                const channel = new MessageChannel();
+                channel.port1.onmessage = (event) => {
+                    if (event.data && event.data.type === 'VERSION') {
+                        setVersionChips(event.data.version);
+                    }
+                };
+                navigator.serviceWorker.controller.postMessage({ type: 'GET_VERSION' }, [channel.port2]);
+            }
+
+            // Respuesta del SW por difusión (sin puerto)
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'VERSION') {
+                    setVersionChips(event.data.version);
+                }
+            });
+
+            // Al activarse un SW nuevo (skipWaiting), recargar una sola vez
+            let refreshing = false;
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (refreshing) return;
+                refreshing = true;
+                window.location.reload();
+            });
+        }
+
+        window.addEventListener('beforeinstallprompt', (event) => {
+            event.preventDefault();
+            window.deferredPrompt = event;
+        });
+
+        window.addEventListener('appinstalled', () => {
+            showToast('RepoIA instalada como aplicación', 'success');
+            window.deferredPrompt = null;
+        });
+
+        // ================================================
+        // UTILIDADES
+        // ================================================
+        function showToast(message, type = "success") {
+            const toast = document.getElementById('toast');
+            if (type === "error") toast.style.backgroundColor = "#dc2626";
+            else if (type === "info") toast.style.backgroundColor = "#2563eb";
+            else toast.style.backgroundColor = "#16a34a";
+            toast.textContent = message;
+            toast.style.opacity = '1';
+            setTimeout(() => { toast.style.opacity = '0'; }, 3000);
+        }
+
+        function setDbStatus(state) {
+            const el = document.getElementById('db-status');
+            if (state === 'ok') {
+                el.textContent = '● Firebase conectado';
+                el.className = 'bg-green-600 text-xs font-mono px-3 py-2 rounded';
+            } else if (state === 'offline') {
+                el.textContent = '● Sin conexión (mostrando caché)';
+                el.className = 'bg-yellow-600 text-xs font-mono px-3 py-2 rounded';
+            } else {
+                el.textContent = 'Conectando...';
+                el.className = 'bg-black bg-opacity-30 text-xs font-mono px-3 py-2 rounded';
+            }
+        }
+
+        function subjectIcon(subject) {
+            const s = subject.toLowerCase();
+            if (s.includes('matem')) return 'fa-calculator';
+            if (s.includes('física') || s.includes('fisica')) return 'fa-atom';
+            if (s.includes('química') || s.includes('quimica')) return 'fa-flask';
+            if (s.includes('biolog') || s.includes('geolog')) return 'fa-dna';
+            if (s.includes('lengua') || s.includes('literatura')) return 'fa-book-open';
+            if (s.includes('ingl') || s.includes('franc') || s.includes('idioma')) return 'fa-language';
+            if (s.includes('tecnolog')) return 'fa-microchip';
+            if (s.includes('informát') || s.includes('informat') || s.includes('program')) return 'fa-laptop-code';
+            if (s.includes('educación física') || s.includes('deport')) return 'fa-person-running';
+            if (s.includes('música')) return 'fa-music';
+            if (s.includes('plástica') || s.includes('visual') || s.includes('dibujo')) return 'fa-palette';
+            if (s.includes('geograf') || s.includes('histor')) return 'fa-earth-europe';
+            if (s.includes('latín') || s.includes('griego')) return 'fa-scroll';
+            if (s.includes('filosof')) return 'fa-brain';
+            if (s.includes('econom') || s.includes('emprend')) return 'fa-chart-line';
+            if (s.includes('orientaci')) return 'fa-compass';
+            if (s.includes('directivo')) return 'fa-users-gear';
+            if (s.includes('relig')) return 'fa-hands-praying';
+            return 'fa-book';
+        }
+
+        // ================================================
+        // NAVEGACIÓN
+        // ================================================
+        function navigateTo(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+            if (screenId === 'screen-browse') renderBrowse();
+        }
+
+        // ================================================
+        // SINCRONIZACIÓN CON FIREBASE
+        // ================================================
+        appsRef.on('value', (snapshot) => {
+            const data = snapshot.val() || {};
+            appsDB = data;
+            appsLoaded = true;
+            setDbStatus('ok');
+
+            // Caché local para consulta sin conexión
+            try { localStorage.setItem('repoia_cache', JSON.stringify(data)); } catch (e) {}
+
+            buildSubjectControls();
+            renderBrowse();
+            updateStats();
+        }, (error) => {
+            console.error('Error Firebase:', error);
+            setDbStatus('error');
+            showToast('Error al conectar con la base de datos', 'error');
+        });
+
+        // Caché local como respaldo inmediato mientras carga
+        (function loadCache() {
+            try {
+                const cached = localStorage.getItem('repoia_cache');
+                if (cached) {
+                    appsDB = JSON.parse(cached) || {};
+                    buildSubjectControls();
+                    renderBrowse();
+                    updateStats();
+                }
+            } catch (e) {}
+        })();
+
+        window.addEventListener('offline', () => setDbStatus('offline'));
+        window.addEventListener('online', () => setDbStatus(appsLoaded ? 'ok' : 'loading'));
+
+        // ================================================
+        // ASIGNATURAS (datalist del formulario + chips de filtro)
+        // ================================================
+        function getSubjects() {
+            const set = new Set(COMMON_SUBJECTS);
+            Object.values(appsDB).forEach(app => {
+                if (app.asignatura) set.add(app.asignatura);
+            });
+            return [...set].sort((a, b) => a.localeCompare(b, 'es'));
+        }
+
+        function buildSubjectControls() {
+            const subjects = getSubjects();
+
+            // Datalist del formulario
+            const datalist = document.getElementById('subjects-list');
+            datalist.innerHTML = subjects.map(s => `<option value="${escapeHtml(s)}">`).join('');
+
+            // Chips del explorador (con contador)
+            const chipsContainer = document.getElementById('subject-chips');
+            const counts = {};
+            Object.values(appsDB).forEach(app => {
+                const subj = app.asignatura || 'Sin asignatura';
+                counts[subj] = (counts[subj] || 0) + 1;
+            });
+
+            let html = `<button class="subject-chip ${currentSubject === '' ? 'active' : ''} px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5" onclick="selectSubject('')">
+                <i class="fa-solid fa-layer-group"></i> Todas
+            </button>`;
+            subjects.forEach(s => {
+                const count = counts[s] || 0;
+                html += `<button class="subject-chip ${currentSubject === s ? 'active' : ''} px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 ${count === 0 ? 'opacity-50' : ''}" onclick="selectSubject('${escapeAttr(s)}')">
+                    <i class="fa-solid ${subjectIcon(s)}"></i> ${escapeHtml(s)}
+                    ${count > 0 ? `<span class="bg-black bg-opacity-20 rounded-full px-1.5 text-[10px]">${count}</span>` : ''}
+                </button>`;
+            });
+            chipsContainer.innerHTML = html;
+        }
+
+        function selectSubject(subject) {
+            currentSubject = subject;
+            renderBrowse();
+            buildSubjectControls();
+        }
+
+        function updateStats() {
+            const total = Object.keys(appsDB).length;
+            const subs = new Set(Object.values(appsDB).map(a => a.asignatura).filter(Boolean)).size;
+            document.getElementById('stats-label').textContent =
+                total === 0 ? 'Aún no hay apps publicadas. ¡Estrena el repositorio!' :
+                `${total} app${total !== 1 ? 's' : ''} publicada${total !== 1 ? 's' : ''} · ${subs} asignatura${subs !== 1 ? 's' : ''}`;
+        }
+
+        function escapeHtml(str) {
+            return String(str ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        }
+        function escapeAttr(str) {
+            return String(str ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        }
+
+        // ================================================
+        // ALTA / EDICIÓN
+        // ================================================
+        function togglePwaUrlInput() {
+            const isChecked = document.getElementById('app-is-pwa').checked;
+            const container = document.getElementById('pwa-url-container');
+            const input = document.getElementById('app-pwa-url');
+            if (isChecked) {
+                container.classList.remove('hidden');
+                input.setAttribute('required', 'true');
+            } else {
+                container.classList.add('hidden');
+                input.removeAttribute('required');
+            }
+        }
+
+        function openAddScreen() {
+            editingAppId = null;
+            document.getElementById('add-app-form').reset();
+            document.getElementById('form-title').textContent = 'Añadir Nueva Aplicación';
+            document.getElementById('form-submit-btn').innerHTML = '<i class="fa-solid fa-save mr-2"></i> Guardar Ficha';
+            togglePwaUrlInput();
+            navigateTo('screen-add');
+        }
+
+        function openEditScreen(id) {
+            const app = appsDB[id];
+            if (!app) return;
+
+            editingAppId = id;
+            document.getElementById('app-title').value = app.titulo || '';
+            document.getElementById('app-subject').value = app.asignatura || '';
+            document.getElementById('app-author').value = app.autor || '';
+            document.getElementById('app-description').value = app.descripcion || '';
+            document.getElementById('app-link').value = app.enlace || '';
+            document.getElementById('app-is-pwa').checked = !!app.esPWA;
+            document.getElementById('app-pwa-url').value = app.pwaUrl || '';
+
+            document.getElementById('form-title').textContent = 'Editar Aplicación';
+            document.getElementById('form-submit-btn').innerHTML = '<i class="fa-solid fa-rotate mr-2"></i> Actualizar Ficha';
+            togglePwaUrlInput();
+            navigateTo('screen-add');
+        }
+
+        document.getElementById('add-app-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+
+            // Normalizar la asignatura: primera letra en mayúscula
+            let subject = document.getElementById('app-subject').value.trim();
+            subject = subject.charAt(0).toUpperCase() + subject.slice(1);
+
+            const formData = {
+                titulo: document.getElementById('app-title').value.trim(),
+                asignatura: subject,
+                autor: document.getElementById('app-author').value.trim(),
+                descripcion: document.getElementById('app-description').value.trim(),
+                enlace: document.getElementById('app-link').value.trim(),
+                esPWA: document.getElementById('app-is-pwa').checked,
+                pwaUrl: document.getElementById('app-is-pwa').checked ? document.getElementById('app-pwa-url').value.trim() : '',
+                actualizada: firebase.database.ServerValue.TIMESTAMP
+            };
+
+            const submitBtn = document.getElementById('form-submit-btn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Guardando...';
+
+            let operation;
+            if (editingAppId) {
+                operation = appsRef.child(editingAppId).update(formData);
+            } else {
+                formData.creada = firebase.database.ServerValue.TIMESTAMP;
+                operation = appsRef.push(formData);
+            }
+
+            operation
+                .then(() => {
+                    showToast(editingAppId ? 'Ficha actualizada' : 'Ficha publicada en el repositorio');
+                    editingAppId = null;
+                    e.target.reset();
+                    navigateTo('screen-browse');
+                })
+                .catch((err) => {
+                    console.error(err);
+                    showToast('Error al guardar: ' + err.message, 'error');
+                })
+                .finally(() => {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fa-solid fa-save mr-2"></i> Guardar Ficha';
+                });
+        });
+
+        function deleteApp(id) {
+            const app = appsDB[id];
+            if (!app) return;
+            if (!confirm(`¿Eliminar la ficha "${app.titulo}" del repositorio? Esta acción no se puede deshacer.`)) return;
+
+            appsRef.child(id).remove()
+                .then(() => showToast('Ficha eliminada'))
+                .catch((err) => {
+                    console.error(err);
+                    showToast('Error al eliminar: ' + err.message, 'error');
+                });
+        }
+
+        // ================================================
+        // EXPLORAR: AGRUPADO POR ASIGNATURA
+        // ================================================
+        function renderBrowse() {
+            const listContainer = document.getElementById('apps-list');
+            const emptyState = document.getElementById('empty-state');
+            const countLabel = document.getElementById('results-count');
+
+            const keyword = document.getElementById('search-keyword').value.toLowerCase();
+
+            const filtered = Object.entries(appsDB)
+                .map(([id, app]) => ({ id, ...app }))
+                .filter(app => {
+                    const matchSubject = currentSubject === '' || app.asignatura === currentSubject;
+                    const haystack = `${app.titulo || ''} ${app.descripcion || ''} ${app.autor || ''}`.toLowerCase();
+                    const matchKeyword = haystack.includes(keyword);
+                    return matchSubject && matchKeyword;
+                })
+                .sort((a, b) => (b.creada || 0) - (a.creada || 0));
+
+            countLabel.textContent = `Mostrando ${filtered.length} app${filtered.length !== 1 ? 's' : ''}`;
+
+            if (filtered.length === 0) {
+                listContainer.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                emptyState.classList.add('flex');
+                return;
+            }
+            emptyState.classList.add('hidden');
+            emptyState.classList.remove('flex');
+
+            // Agrupar por asignatura
+            const groups = {};
+            filtered.forEach(app => {
+                const subj = app.asignatura || 'Sin asignatura';
+                (groups[subj] = groups[subj] || []).push(app);
+            });
+
+            const sortedSubjects = Object.keys(groups).sort((a, b) => a.localeCompare(b, 'es'));
+
+            listContainer.innerHTML = sortedSubjects.map(subj => `
+                <section>
+                    <h3 class="flex items-center gap-2 text-lg font-bold text-gray-700 mb-3">
+                        <span class="bg-indigo-600 text-white w-8 h-8 rounded-lg flex items-center justify-center text-sm">
+                            <i class="fa-solid ${subjectIcon(subj)}"></i>
+                        </span>
+                        ${escapeHtml(subj)}
+                        <span class="text-sm font-normal text-gray-400">(${groups[subj].length})</span>
+                    </h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        ${groups[subj].map(renderCard).join('')}
+                    </div>
+                </section>
+            `).join('');
+        }
+
+        function renderCard(app) {
+            const fecha = app.creada ? new Date(app.creada).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+            const pwaBadge = app.esPWA ? `<span class="bg-green-50 text-green-700 border border-green-200 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">PWA</span>` : '';
+
+            return `
+                <article class="bg-white p-4 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition flex flex-col">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            ${pwaBadge}
+                            ${fecha ? `<span class="text-[11px] text-gray-400"><i class="fa-regular fa-clock mr-1"></i>${fecha}</span>` : ''}
+                        </div>
+                        <div class="flex gap-1">
+                            <button onclick="openEditScreen('${app.id}')" class="text-gray-300 hover:text-blue-500 transition px-1" title="Editar">
+                                <i class="fa-solid fa-pen-to-square"></i>
+                            </button>
+                            <button onclick="deleteApp('${app.id}')" class="text-gray-300 hover:text-red-500 transition px-1" title="Eliminar">
+                                <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <h4 class="text-lg font-bold text-gray-800 mb-1">${escapeHtml(app.titulo)}</h4>
+                    ${app.autor ? `<p class="text-xs text-gray-500 mb-1"><i class="fa-solid fa-user-pen mr-1"></i>${escapeHtml(app.autor)}</p>` : ''}
+                    <p class="text-sm text-gray-600 mb-4 line-clamp-3 flex-grow">${escapeHtml(app.descripcion) || 'Sin descripción disponible.'}</p>
+                    <div class="flex flex-col gap-2">
+                        <a href="${escapeAttr(app.enlace)}" target="_blank" rel="noopener" class="flex items-center justify-center w-full py-2 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition text-sm font-medium">
+                            <i class="fa-solid fa-arrow-up-right-from-square mr-2"></i> Abrir App
+                        </a>
+                        ${app.esPWA && app.pwaUrl ? `<a href="${escapeAttr(app.pwaUrl)}" target="_blank" rel="noopener" class="flex items-center justify-center w-full py-2 bg-green-50 text-green-600 rounded hover:bg-green-100 transition text-sm font-medium">
+                            <i class="fa-solid fa-mobile-screen mr-2"></i> Versión PWA
+                        </a>` : ''}
+                    </div>
+                </article>
+            `;
+        }
+
+        // ================================================
+        // ARRANQUE
+        // ================================================
+        window.addEventListener('DOMContentLoaded', () => {
+            const introScreen = document.getElementById('screen-intro');
+            introScreen.addEventListener('touchstart', (e) => {
+                if (e.cancelable) e.preventDefault();
+                navigateTo('screen-menu');
+            }, { passive: false });
+
+            buildSubjectControls();
+            renderBrowse();
+
+            // Ocultar loader (con margen para que Firebase dé su primer callback)
+            setTimeout(() => {
+                const loader = document.getElementById('app-loader');
+                loader.style.opacity = '0';
+                setTimeout(() => loader.remove(), 500);
+            }, 800);
+        });
+    </script>
+</body>
+</html>
