@@ -150,6 +150,18 @@
                 </div>
             </button>
 
+            <button onclick="navigateTo('screen-subjects')" class="w-full max-w-md bg-white border-2 border-amber-100 hover:border-amber-500 hover:shadow-lg p-6 rounded-xl transition-all duration-300 group text-left">
+                <div class="flex items-center">
+                    <div class="bg-amber-100 text-amber-600 p-4 rounded-full mr-4 group-hover:bg-amber-600 group-hover:text-white transition-colors">
+                        <i class="fa-solid fa-tags text-2xl"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-800">Gestionar Asignaturas</h3>
+                        <p class="text-gray-500 text-sm mt-1">Renombra o elimina asignaturas del repositorio.</p>
+                    </div>
+                </div>
+            </button>
+
             <p id="stats-label" class="text-sm text-gray-400"></p>
         </main>
 
@@ -176,12 +188,18 @@
                     <input type="text" id="app-title" required class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none transition" placeholder="Ej: Generador de Ejercicios v2">
                 </div>
 
-                <!-- Asignatura -->
+                <!-- Asignaturas (múltiples) -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Asignatura a la que va destinada <span class="text-red-500">*</span></label>
-                    <input type="text" id="app-subject" required list="subjects-list" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none transition" placeholder="Escribe o elige una asignatura">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Asignaturas a las que va destinada <span class="text-red-500">*</span></label>
+                    <div class="flex gap-2">
+                        <input type="text" id="app-subject-input" list="subjects-list" autocomplete="off" class="flex-grow px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:outline-none transition" placeholder="Escribe o elige una asignatura">
+                        <button type="button" onclick="addSubjectToForm()" class="bg-green-600 hover:bg-green-700 text-white px-4 rounded-lg transition flex items-center" title="Añadir asignatura">
+                            <i class="fa-solid fa-plus"></i>
+                        </button>
+                    </div>
                     <datalist id="subjects-list"></datalist>
-                    <p class="text-xs text-gray-400 mt-1">Las apps se agruparán en el repositorio según este campo.</p>
+                    <div id="form-subjects" class="flex flex-wrap gap-2 mt-2"></div>
+                    <p class="text-xs text-gray-400 mt-1">Puedes añadir varias asignaturas (Enter o el botón +). Las apps se agruparán en el repositorio según estos campos.</p>
                 </div>
 
                 <!-- Autoría -->
@@ -238,7 +256,7 @@
             <input type="text" id="search-keyword" placeholder="Buscar por título, descripción o autor/a..." class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" oninput="renderBrowse()">
 
             <!-- Chips de asignaturas -->
-            <div id="subject-chips" class="flex gap-2 overflow-x-auto no-scrollbar pb-1"></div>
+            <div id="subject-chips" class="flex flex-wrap gap-2"></div>
 
             <div class="text-center text-xs text-gray-500" id="results-count">Mostrando 0 apps</div>
         </div>
@@ -250,6 +268,32 @@
                 <i class="fa-solid fa-box-open text-5xl mb-4"></i>
                 <p>No se encontraron aplicaciones.</p>
             </div>
+        </main>
+    </div>
+
+    <!-- =======================
+         PANTALLA 5: GESTIONAR ASIGNATURAS
+    ======================== -->
+    <div id="screen-subjects" class="screen flex-col h-full w-full max-w-4xl mx-auto bg-white shadow-xl md:my-4 md:rounded-xl overflow-hidden">
+        <header class="bg-amber-500 text-white p-4 shadow-md flex items-center gap-3">
+            <button onclick="navigateTo('screen-menu')" class="hover:bg-amber-600 p-2 rounded-full transition"><i class="fa-solid fa-arrow-left"></i></button>
+            <div>
+                <h2 class="text-xl font-bold">Gestionar Asignaturas</h2>
+                <p class="text-xs opacity-80">Renombra o elimina asignaturas del repositorio</p>
+            </div>
+        </header>
+
+        <main class="flex-grow p-4 bg-gray-50 overflow-y-auto no-scrollbar">
+            <div id="subjects-manager-list" class="space-y-2 max-w-3xl mx-auto"></div>
+
+            <div id="subjects-manager-empty" class="hidden flex-col items-center justify-center mt-10 text-gray-400">
+                <i class="fa-solid fa-tags text-5xl mb-4"></i>
+                <p>No hay asignaturas.</p>
+            </div>
+
+            <p class="text-xs text-gray-400 text-center mt-4 max-w-3xl mx-auto">
+                Renombrar o eliminar una asignatura afecta a todas las fichas que la utilizan. Los cambios se aplican en tiempo real para todos los usuarios.
+            </p>
         </main>
     </div>
 
@@ -419,6 +463,7 @@
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
             document.getElementById(screenId).classList.add('active');
             if (screenId === 'screen-browse') renderBrowse();
+            if (screenId === 'screen-subjects') renderSubjectsManager();
         }
 
         // ================================================
@@ -458,13 +503,41 @@
         window.addEventListener('offline', () => setDbStatus('offline'));
         window.addEventListener('online', () => setDbStatus(appsLoaded ? 'ok' : 'loading'));
 
+        // Catálogo compartido de asignaturas (nodo config/asignaturas en Firebase)
+        // Formato: { claveFirebase: nombreAsignatura }
+        const subjectsRef = db.ref('config/asignaturas');
+        let subjectsCatalog = {};
+        subjectsRef.on('value', (snapshot) => {
+            subjectsCatalog = snapshot.val() || {};
+            buildSubjectControls();
+            const managerScreen = document.getElementById('screen-subjects');
+            if (managerScreen && managerScreen.classList.contains('active')) renderSubjectsManager();
+        });
+
+        // Sembrar el catálogo con las asignaturas habituales la primera vez
+        (function seedSubjectsCatalog() {
+            subjectsRef.once('value').then((snap) => {
+                if (snap.exists()) return;
+                const updates = {};
+                COMMON_SUBJECTS.forEach((s) => { updates[subjectsRef.push().key] = s; });
+                return subjectsRef.update(updates);
+            }).catch((err) => console.warn('No se pudo sembrar el catálogo de asignaturas:', err));
+        })();
+
         // ================================================
         // ASIGNATURAS (datalist del formulario + chips de filtro)
         // ================================================
+        // Asignaturas de una ficha (array nuevo o campo antiguo de una sola asignatura)
+        function getAppSubjects(app) {
+            if (Array.isArray(app.asignaturas)) return app.asignaturas.filter(Boolean);
+            if (app.asignatura) return [app.asignatura];
+            return [];
+        }
+
         function getSubjects() {
-            const set = new Set(COMMON_SUBJECTS);
+            const set = new Set(Object.values(subjectsCatalog));
             Object.values(appsDB).forEach(app => {
-                if (app.asignatura) set.add(app.asignatura);
+                getAppSubjects(app).forEach(s => set.add(s));
             });
             return [...set].sort((a, b) => a.localeCompare(b, 'es'));
         }
@@ -480,8 +553,7 @@
             const chipsContainer = document.getElementById('subject-chips');
             const counts = {};
             Object.values(appsDB).forEach(app => {
-                const subj = app.asignatura || 'Sin asignatura';
-                counts[subj] = (counts[subj] || 0) + 1;
+                getAppSubjects(app).forEach(s => { counts[s] = (counts[s] || 0) + 1; });
             });
 
             let html = `<button class="subject-chip ${currentSubject === '' ? 'active' : ''} px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5" onclick="selectSubject('')">
@@ -505,7 +577,7 @@
 
         function updateStats() {
             const total = Object.keys(appsDB).length;
-            const subs = new Set(Object.values(appsDB).map(a => a.asignatura).filter(Boolean)).size;
+            const subs = new Set(Object.values(appsDB).flatMap(app => getAppSubjects(app))).size;
             document.getElementById('stats-label').textContent =
                 total === 0 ? 'Aún no hay apps publicadas. ¡Estrena el repositorio!' :
                 `${total} app${total !== 1 ? 's' : ''} publicada${total !== 1 ? 's' : ''} · ${subs} asignatura${subs !== 1 ? 's' : ''}`;
@@ -516,6 +588,48 @@
         }
         function escapeAttr(str) {
             return String(str ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        }
+
+        // ================================================
+        // ASIGNATURAS DEL FORMULARIO (múltiples)
+        // ================================================
+        let formSubjects = [];
+
+        function normalizeSubjectName(name) {
+            name = String(name || '').trim().replace(/\s+/g, ' ');
+            return name ? name.charAt(0).toUpperCase() + name.slice(1) : '';
+        }
+
+        function renderFormSubjects() {
+            const container = document.getElementById('form-subjects');
+            if (!container) return;
+            container.innerHTML = formSubjects.map(s => `
+                <span class="bg-green-50 border border-green-200 text-green-700 text-xs font-semibold px-2.5 py-1 rounded-full inline-flex items-center gap-1.5">
+                    <i class="fa-solid ${subjectIcon(s)}"></i> ${escapeHtml(s)}
+                    <button type="button" onclick="removeSubjectFromForm('${escapeAttr(s)}')" class="text-green-400 hover:text-red-500" title="Quitar">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </span>`).join('');
+        }
+
+        function addSubjectToForm() {
+            const input = document.getElementById('app-subject-input');
+            const name = normalizeSubjectName(input.value);
+            if (!name) return;
+            if (formSubjects.some(s => s.toLowerCase() === name.toLowerCase())) {
+                showToast('Esa asignatura ya está añadida a la ficha', 'info');
+                input.value = '';
+                return;
+            }
+            formSubjects.push(name);
+            input.value = '';
+            renderFormSubjects();
+            input.focus();
+        }
+
+        function removeSubjectFromForm(name) {
+            formSubjects = formSubjects.filter(s => s !== name);
+            renderFormSubjects();
         }
 
         // ================================================
@@ -537,6 +651,8 @@
         function openAddScreen() {
             editingAppId = null;
             document.getElementById('add-app-form').reset();
+            formSubjects = [];
+            renderFormSubjects();
             document.getElementById('form-title').textContent = 'Añadir Nueva Aplicación';
             document.getElementById('form-submit-btn').innerHTML = '<i class="fa-solid fa-save mr-2"></i> Guardar Ficha';
             togglePwaUrlInput();
@@ -549,7 +665,8 @@
 
             editingAppId = id;
             document.getElementById('app-title').value = app.titulo || '';
-            document.getElementById('app-subject').value = app.asignatura || '';
+            formSubjects = getAppSubjects(app);
+            renderFormSubjects();
             document.getElementById('app-author').value = app.autor || '';
             document.getElementById('app-description').value = app.descripcion || '';
             document.getElementById('app-link').value = app.enlace || '';
@@ -565,13 +682,15 @@
         document.getElementById('add-app-form').addEventListener('submit', (e) => {
             e.preventDefault();
 
-            // Normalizar la asignatura: primera letra en mayúscula
-            let subject = document.getElementById('app-subject').value.trim();
-            subject = subject.charAt(0).toUpperCase() + subject.slice(1);
+            if (formSubjects.length === 0) {
+                showToast('Añade al menos una asignatura a la ficha', 'error');
+                return;
+            }
 
             const formData = {
                 titulo: document.getElementById('app-title').value.trim(),
-                asignatura: subject,
+                asignaturas: formSubjects.slice(),
+                asignatura: null, // limpia el campo antiguo de una sola asignatura
                 autor: document.getElementById('app-author').value.trim(),
                 descripcion: document.getElementById('app-description').value.trim(),
                 enlace: document.getElementById('app-link').value.trim(),
@@ -591,6 +710,13 @@
                 formData.creada = firebase.database.ServerValue.TIMESTAMP;
                 operation = appsRef.push(formData);
             }
+
+            // Si alguna asignatura no existía, registrarla para que aparezca su botón
+            formSubjects.forEach((s) => {
+                if (!getSubjects().includes(s)) {
+                    subjectsRef.push(s).catch((err) => console.warn('No se pudo registrar la asignatura:', err));
+                }
+            });
 
             operation
                 .then(() => {
@@ -635,7 +761,8 @@
             const filtered = Object.entries(appsDB)
                 .map(([id, app]) => ({ id, ...app }))
                 .filter(app => {
-                    const matchSubject = currentSubject === '' || app.asignatura === currentSubject;
+                    const subjects = getAppSubjects(app);
+                    const matchSubject = currentSubject === '' || subjects.includes(currentSubject);
                     const haystack = `${app.titulo || ''} ${app.descripcion || ''} ${app.autor || ''}`.toLowerCase();
                     const matchKeyword = haystack.includes(keyword);
                     return matchSubject && matchKeyword;
@@ -653,11 +780,17 @@
             emptyState.classList.add('hidden');
             emptyState.classList.remove('flex');
 
-            // Agrupar por asignatura
+            // Agrupar por asignatura: una app puede aparecer en varias secciones
             const groups = {};
             filtered.forEach(app => {
-                const subj = app.asignatura || 'Sin asignatura';
-                (groups[subj] = groups[subj] || []).push(app);
+                const subjects = getAppSubjects(app);
+                if (subjects.length === 0) {
+                    (groups['Sin asignatura'] = groups['Sin asignatura'] || []).push(app);
+                } else {
+                    subjects.forEach(subj => {
+                        (groups[subj] = groups[subj] || []).push(app);
+                    });
+                }
             });
 
             const sortedSubjects = Object.keys(groups).sort((a, b) => a.localeCompare(b, 'es'));
@@ -681,6 +814,10 @@
         function renderCard(app) {
             const fecha = app.creada ? new Date(app.creada).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
             const pwaBadge = app.esPWA ? `<span class="bg-green-50 text-green-700 border border-green-200 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide">PWA</span>` : '';
+            const subjectBadges = getAppSubjects(app).map(s => `
+                <span class="bg-indigo-50 text-indigo-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                    <i class="fa-solid ${subjectIcon(s)} mr-1"></i>${escapeHtml(s)}
+                </span>`).join('');
 
             return `
                 <article class="bg-white p-4 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition flex flex-col">
@@ -699,6 +836,7 @@
                         </div>
                     </div>
                     <h4 class="text-lg font-bold text-gray-800 mb-1">${escapeHtml(app.titulo)}</h4>
+                    ${subjectBadges ? `<div class="flex flex-wrap gap-1 mb-2">${subjectBadges}</div>` : ''}
                     ${app.autor ? `<p class="text-xs text-gray-500 mb-1"><i class="fa-solid fa-user-pen mr-1"></i>${escapeHtml(app.autor)}</p>` : ''}
                     <p class="text-sm text-gray-600 mb-4 line-clamp-3 flex-grow">${escapeHtml(app.descripcion) || 'Sin descripción disponible.'}</p>
                     <div class="flex flex-col gap-2">
@@ -723,6 +861,16 @@
                 navigateTo('screen-menu');
             }, { passive: false });
 
+            // Input de asignaturas del formulario: Enter o selección del desplegable
+            const subjectInput = document.getElementById('app-subject-input');
+            subjectInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addSubjectToForm();
+                }
+            });
+            subjectInput.addEventListener('change', addSubjectToForm);
+
             buildSubjectControls();
             renderBrowse();
 
@@ -733,6 +881,145 @@
                 setTimeout(() => loader.remove(), 500);
             }, 800);
         });
+
+        // ================================================
+        // GESTIÓN DE ASIGNATURAS (renombrar / eliminar)
+        // ================================================
+        let renamingSubject = null;
+
+        function subjectUsageCounts() {
+            const counts = {};
+            Object.values(appsDB).forEach(app => {
+                getAppSubjects(app).forEach(s => { counts[s] = (counts[s] || 0) + 1; });
+            });
+            return counts;
+        }
+
+        function renderSubjectsManager() {
+            const list = document.getElementById('subjects-manager-list');
+            const empty = document.getElementById('subjects-manager-empty');
+            if (!list) return;
+
+            const subjects = getSubjects();
+            const counts = subjectUsageCounts();
+
+            if (subjects.length === 0) {
+                list.innerHTML = '';
+                empty.classList.remove('hidden');
+                empty.classList.add('flex');
+                return;
+            }
+            empty.classList.add('hidden');
+            empty.classList.remove('flex');
+
+            list.innerHTML = subjects.map((s) => {
+                const count = counts[s] || 0;
+
+                // Fila en modo edición (renombrar)
+                if (renamingSubject === s) {
+                    return `
+                    <div class="bg-white border-2 border-amber-300 rounded-lg p-3 flex items-center gap-2 shadow-sm">
+                        <i class="fa-solid ${subjectIcon(s)} text-amber-500"></i>
+                        <input type="text" id="rename-input" value="${escapeAttr(s)}" maxlength="60" autocomplete="off"
+                            class="flex-grow min-w-0 px-3 py-1.5 border border-gray-300 rounded focus:ring-2 focus:ring-amber-400 focus:outline-none text-sm"
+                            onkeydown="if(event.key==='Enter'){event.preventDefault();renameSubjectSave('${escapeAttr(s)}')}else if(event.key==='Escape'){renamingSubject=null;renderSubjectsManager();}">
+                        <button onclick="renameSubjectSave('${escapeAttr(s)}')" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1.5 px-3 rounded transition" title="Guardar nombre">
+                            <i class="fa-solid fa-check"></i>
+                        </button>
+                        <button onclick="renamingSubject=null;renderSubjectsManager()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold py-1.5 px-3 rounded transition" title="Cancelar">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>`;
+                }
+
+                return `
+                <div class="bg-white border border-gray-200 rounded-lg p-3 flex items-center gap-3 shadow-sm">
+                    <span class="bg-amber-100 text-amber-600 w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0">
+                        <i class="fa-solid ${subjectIcon(s)}"></i>
+                    </span>
+                    <div class="flex-grow min-w-0">
+                        <p class="font-semibold text-gray-800 truncate">${escapeHtml(s)}</p>
+                        <p class="text-xs text-gray-400">${count} app${count !== 1 ? 's' : ''} ${count !== 1 ? 'la utilizan' : 'la utiliza'}</p>
+                    </div>
+                    <button onclick="startRenameSubject('${escapeAttr(s)}')" class="text-gray-300 hover:text-blue-500 px-2 py-1 transition" title="Renombrar">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    <button onclick="removeSubject('${escapeAttr(s)}')" class="text-gray-300 hover:text-red-500 px-2 py-1 transition" title="Eliminar">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>`;
+            }).join('');
+        }
+
+        function startRenameSubject(name) {
+            renamingSubject = name;
+            renderSubjectsManager();
+            const input = document.getElementById('rename-input');
+            if (input) { input.focus(); input.select(); }
+        }
+
+        async function renameSubjectSave(oldName) {
+            const input = document.getElementById('rename-input');
+            if (!input) return;
+            const newName = normalizeSubjectName(input.value);
+            if (!newName) { showToast('El nombre no puede estar vacío', 'error'); return; }
+            if (newName === oldName) { renamingSubject = null; renderSubjectsManager(); return; }
+            if (getSubjects().some(s => s.toLowerCase() === newName.toLowerCase())) {
+                showToast('Ya existe una asignatura con ese nombre', 'error');
+                return;
+            }
+
+            // Actualización atómica: catálogo + todas las fichas que la usan
+            const updates = {};
+            Object.entries(subjectsCatalog).forEach(([key, name]) => {
+                if (name === oldName) updates[`config/asignaturas/${key}`] = newName;
+            });
+            Object.entries(appsDB).forEach(([id, app]) => {
+                const subs = getAppSubjects(app);
+                if (subs.includes(oldName)) {
+                    updates[`apps/${id}/asignaturas`] = subs.map(s => s === oldName ? newName : s);
+                }
+            });
+
+            try {
+                await db.ref().update(updates);
+                showToast(`Asignatura renombrada a "${newName}"`);
+                renamingSubject = null;
+                renderSubjectsManager();
+            } catch (err) {
+                console.error(err);
+                showToast('Error al renombrar: ' + err.message, 'error');
+            }
+        }
+
+        async function removeSubject(name) {
+            const count = subjectUsageCounts()[name] || 0;
+            const msg = count > 0
+                ? `La asignatura "${name}" se quitará de ${count} ficha(s) y desaparecerá del repositorio. ¿Continuar?`
+                : `¿Eliminar la asignatura "${name}" del repositorio?`;
+            if (!confirm(msg)) return;
+
+            const updates = {};
+            Object.entries(subjectsCatalog).forEach(([key, val]) => {
+                if (val === name) updates[`config/asignaturas/${key}`] = null;
+            });
+            Object.entries(appsDB).forEach(([id, app]) => {
+                const subs = getAppSubjects(app);
+                if (subs.includes(name)) {
+                    updates[`apps/${id}/asignaturas`] = subs.filter(s => s !== name);
+                }
+            });
+
+            try {
+                await db.ref().update(updates);
+                showToast('Asignatura eliminada');
+                if (currentSubject === name) currentSubject = '';
+                renderSubjectsManager();
+            } catch (err) {
+                console.error(err);
+                showToast('Error al eliminar: ' + err.message, 'error');
+            }
+        }
     </script>
 </body>
 </html>
